@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Tableau de bord — Wi-Fi Zone</title>
+<style>
+:root{--c1:#126B57;--c1s:#e3f1ec;--c2:#E3A23B;--txt:#1d2421;--muted:#66716b;--bg:#f3f6f4;--card:#fff;--line:#e4e9e6;
+  --ok:#1f8a4c;--warn:#b7791f;--bad:#c53030}
+@media (prefers-color-scheme:dark){:root{--c1:#3fb68f;--c1s:#173a30;--txt:#e8eeea;--muted:#9fb0a7;--bg:#0f1714;--card:#18231f;--line:#26332e}}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--txt);font-size:15px}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:2}
+header h1{font-size:18px;margin:0;color:var(--c1)}
+.tools{display:flex;gap:8px;flex-wrap:wrap}
+select,button,input{font:inherit;color:inherit}
+select,input{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
+button{background:var(--c1);color:#fff;border:0;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer}
+button.ghost{background:transparent;color:var(--c1);border:1px solid var(--line)}
+button.small{padding:4px 9px;font-size:13px}
+main{max-width:1150px;margin:0 auto;padding:16px}
+.grid{display:grid;gap:12px}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.two{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;min-width:0}
+.card h2{font-size:14px;margin:0 0 10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.kpi .v{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums}
+.kpi .s{color:var(--muted);font-size:13px;margin-top:2px}
+.alert{border-radius:12px;padding:12px 14px;margin-bottom:12px;font-weight:600}
+.alert.bad{background:#fde8e8;color:#9b1c1c}.alert.warn{background:#fff4dc;color:#7a5200}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{font-size:12px;color:var(--muted);text-transform:uppercase}
+td.n,th.n{text-align:right}
+.scroll{overflow-x:auto}
+.chip{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;font-weight:700}
+.chip.success{background:#dcf3e5;color:var(--ok)}.chip.pending{background:#fff4dc;color:var(--warn)}
+.chip.failed,.chip.cancelled,.chip.paid_no_stock{background:#fde8e8;color:var(--bad)}
+.bar{display:flex;align-items:center;gap:8px;margin:7px 0}
+.bar .lab{width:110px;flex:none;font-size:14px;overflow:hidden;text-overflow:ellipsis}
+.bar .trk{flex:1;background:var(--c1s);border-radius:6px;height:22px;overflow:hidden}
+.bar .fill{background:var(--c1);height:100%}
+.bar .val{width:96px;text-align:right;font-weight:700;font-size:14px;font-variant-numeric:tabular-nums}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+.muted{color:var(--muted)}
+#chart svg{width:100%;height:220px;display:block}
+#chart .tip{font-size:13px;color:var(--muted);min-height:18px}
+.stockbar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;min-width:80px}
+.stockbar div{height:100%}
+#login{max-width:360px;margin:12vh auto;padding:0 16px}
+#login .card{padding:22px}
+#login input{width:100%;padding:12px;margin:10px 0}
+#login button{width:100%;padding:12px}
+.err{color:var(--bad);font-weight:600;margin-top:8px}
+@media (max-width:600px){.kpi .v{font-size:22px}.bar .lab{width:80px}header{position:static}}
+</style></head>
+<body>
+
+<div id="login" hidden>
+  <div class="card">
+    <h1 style="color:var(--c1);margin-top:0">Tableau de bord</h1>
+    <p class="muted">Mot de passe gérant (ADMIN_PASSWORD)</p>
+    <form id="lf"><input id="pw" type="password" autocomplete="current-password" required>
+    <button>Se connecter</button><div class="err" id="lerr"></div></form>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <h1 id="title">Wi-Fi Zone</h1>
+    <div class="tools">
+      <select id="zone" aria-label="Zone"></select>
+      <select id="days" aria-label="Période">
+        <option value="7">7 jours</option><option value="30" selected>30 jours</option><option value="90">90 jours</option>
+      </select>
+      <button class="ghost" id="csv">Export CSV</button>
+      <button class="ghost" id="out">Quitter</button>
+    </div>
+  </header>
+  <main>
+    <div id="alerts"></div>
+    <div class="grid kpis" id="kpis"></div>
+    <div class="card" style="margin-top:12px" id="chart">
+      <h2>Ventes par jour (F CFA)</h2>
+      <div class="tip" id="tip">Touchez une barre pour le détail</div>
+      <svg id="svg" role="img" aria-label="Ventes par jour"></svg>
+    </div>
+    <div class="grid two" style="margin-top:12px">
+      <div class="card"><h2>Par forfait</h2><div id="byPricing"></div></div>
+      <div class="card"><h2>Par opérateur</h2><div id="byMethod"></div></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h2>Forfaits &amp; stock de tickets</h2>
+      <div class="scroll"><table id="stock"></table></div>
+      <p class="muted" style="font-size:13px;margin:8px 0 0">Le stock se recharge tout seul à chaque synchro du routeur (toutes les 2 min).
+        « En route » = créés par le serveur, pas encore confirmés par le MikroTik.</p>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h2>Tickets papier (revendeurs) &amp; affiche</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <select id="pPricing" aria-label="Forfait"></select>
+        <input id="pQty" type="number" min="1" max="400" value="40" style="width:90px" aria-label="Quantité">
+        <button id="pMake">Créer le lot</button>
+        <a id="aff" href="affiche.html" target="_blank" style="margin-left:auto"><button class="ghost" type="button">🪧 Créer l'affiche</button></a>
+      </div>
+      <p class="muted" style="font-size:13px;margin:8px 0">40 tickets par page A4. Les codes partent sur le routeur à la prochaine synchro (2 min) ;
+        ils ne sont jamais vendus en ligne. Imprime, découpe, confie-les aux revendeurs.</p>
+      <div class="scroll"><table id="lots"></table></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h2>Derniers paiements</h2>
+      <div class="scroll"><table id="recent"></table></div>
+    </div>
+    <p class="muted" style="text-align:center;font-size:13px">Actualisation automatique toutes les 60 s · <span id="upd"></span></p>
+  </main>
+</div>
+
+<script>
+const OPS = { orange_ci:'Orange Money', mtn_ci:'MTN MoMo', moov_ci:'Moov Money', wave_ci:'Wave',
+  mtn_bj:'MTN MoMo', moov_bj:'Moov Money', celtiis_bj:'Celtiis', orange_sn:'Orange Money', wave_sn:'Wave',
+  freemoney_sn:'Free Money', orange_ml:'Orange Money', moov_ml:'Moov Money', orange_bf:'Orange Money',
+  moov_bf:'Moov Money', moov_tg:'Moov Money', togocel:'T-Money', inconnu:'Non précisé' };
+const STAT = { success:'Payé', pending:'En attente', failed:'Échoué', cancelled:'Annulé', paid_no_stock:'Payé sans ticket' };
+const $ = (id) => document.getElementById(id);
+const F = (n) => (n || 0).toLocaleString('fr-FR') + ' F';
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dt = (d) => d ? new Date(d).toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '—';
+const ago = (d) => { if (!d) return null; const m = Math.round((Date.now() - new Date(d)) / 60000); return m; };
+let PW = ''; try { PW = sessionStorage.getItem('pw') || ''; } catch (e) {}
+let timer;
+
+async function api(path, opt = {}) {
+  const r = await fetch('/api/admin' + path, { ...opt, headers: { 'Content-Type':'application/json', Authorization:'Bearer ' + PW, ...(opt.headers||{}) } });
+  if (r.status === 401) { logout('Mot de passe incorrect'); throw new Error('401'); }
+  const d = r.headers.get('content-type')?.includes('json') ? await r.json() : await r.blob();
+  if (!r.ok) throw new Error(d.error || 'Erreur ' + r.status);
+  return d;
+}
+function logout(msg) {
+  PW = ''; try { sessionStorage.removeItem('pw'); } catch (e) {}
+  clearInterval(timer); $('app').hidden = true; $('login').hidden = false; $('lerr').textContent = msg || '';
+}
+$('lf').onsubmit = async (e) => {
+  e.preventDefault(); PW = $('pw').value; $('lerr').textContent = '';
+  try { await start(); try { sessionStorage.setItem('pw', PW); } catch (e) {} }
+  catch (err) { if (err.message !== '401') $('lerr').textContent = err.message; }
+};
+$('out').onclick = () => logout();
+
+async function start() {
+  const zones = await api('/zones');
+  if (!zones.length) throw new Error('Aucune zone : lance « npm run zone:create » d\'abord');
+  $('zone').innerHTML = zones.map((z) => `<option value="${esc(z.id)}">${esc(z.name)}</option>`).join('');
+  try { const s = localStorage.getItem('zone'); if (zones.some((z) => z.id === s)) $('zone').value = s; } catch (e) {}
+  $('login').hidden = true; $('app').hidden = false;
+  await load();
+  clearInterval(timer); timer = setInterval(load, 60000);
+}
+$('zone').onchange = () => { try { localStorage.setItem('zone', $('zone').value); } catch (e) {} load(); };
+$('days').onchange = load;
+
+async function load() {
+  let d;
+  try { d = await api(`/stats?zone=${encodeURIComponent($('zone').value)}&days=${$('days').value}`); }
+  catch (e) { if (e.message !== '401') $('alerts').innerHTML = `<div class="alert bad">${esc(e.message)}</div>`; return; }
+  $('title').textContent = d.zone.name;
+  $('upd').textContent = 'mis à jour à ' + new Date().toLocaleTimeString('fr-FR');
+
+  // ---------- alertes
+  const al = [];
+  const m = ago(d.zone.last_sync_at);
+  if (m === null) al.push(['bad', 'Le routeur ne s\'est jamais synchronisé : importe 02-sync-tickets.rsc dans le MikroTik.']);
+  else if (m > 10) al.push(['bad', `Routeur muet depuis ${m} min (coupure de courant, Starlink ou internet ?). Les ventes continuent tant qu'il reste du stock.`]);
+  d.stock.filter((s) => s.active && s.free < 10).forEach((s) =>
+    al.push([s.free === 0 ? 'bad' : 'warn', `Stock bas pour « ${s.label} » : ${s.free} ticket(s) libre(s).`]));
+  d.issues.forEach((i) => al.push(['bad', `Client payé sans ticket : ${esc(i.phone)} · ${F(i.amount)} · ${esc(i.label)} · ${dt(i.created_at)}
+     <button class="small" data-resolve="${esc(i.id)}">Attribuer un ticket</button>`]));
+  if (d.stale_pending) al.push(['warn', `${d.stale_pending} paiement(s) en attente depuis plus de 10 min : vérifie-les dans la liste ci-dessous.`]);
+  $('alerts').innerHTML = al.map(([t, h]) => `<div class="alert ${t}">${t === 'bad' ? '⚠️ ' : ''}${h}</div>`).join('');
+
+  // ---------- KPI
+  const k = d.kpi;
+  const sync = m === null ? ['bad','jamais'] : m <= 5 ? ['ok', m <= 1 ? 'à l\'instant' : `il y a ${m} min`] : ['bad', `il y a ${m} min`];
+  $('kpis').innerHTML = [
+    ['Aujourd\'hui', F(k.today_gross), `${k.today_tickets} ticket(s) vendus`],
+    ['7 derniers jours', F(k.week_gross), 'chiffre d\'affaires brut'],
+    ['30 derniers jours', F(k.month_gross), `${k.month_tickets} tickets · net ${F(k.month_net)}`],
+    ['Total depuis le début', F(k.all_gross), `commission Moneroo comptée : ${d.fee_percent} %`],
+    ['Routeur MikroTik', `<span class="dot" style="background:var(--${sync[0] === 'ok' ? 'ok' : 'bad'})"></span>${sync[0] === 'ok' ? 'En ligne' : 'Hors ligne'}`, 'dernière synchro ' + sync[1]],
+  ].map(([t, v, s]) => `<div class="card kpi"><h2>${t}</h2><div class="v">${v}</div><div class="s">${s}</div></div>`).join('');
+
+  chart(d.daily);
+  bars('byPricing', d.byPricing.map((r) => [r.label, r.gross, r.tickets]));
+  bars('byMethod', d.byMethod.map((r) => [OPS[r.method] || r.method, r.gross, r.tickets]));
+
+  // ---------- stock
+  $('stock').innerHTML = `<tr><th>Forfait</th><th>Profil</th><th class="n">Prix</th><th>Libres</th><th class="n">En route</th><th class="n">Vendus</th><th class="n">Papier</th><th>En vente</th></tr>` +
+    d.stock.map((s) => {
+      const pct = Math.min(100, Math.round(s.free / d.stock_target * 100));
+      const col = s.free === 0 ? 'var(--bad)' : s.free < 10 ? 'var(--warn)' : 'var(--ok)';
+      return `<tr><td><b>${esc(s.label)}</b></td><td class="muted">${esc(s.profile)}</td>
+        <td class="n"><input type="number" min="100" step="50" value="${s.price}" style="width:90px;text-align:right" data-price="${s.id}"></td>
+        <td><div style="display:flex;align-items:center;gap:8px"><b style="width:28px">${s.free}</b><div class="stockbar"><div style="width:${pct}%;background:${col}"></div></div></div></td>
+        <td class="n">${s.waiting}</td><td class="n">${s.sold}</td><td class="n">${s.paper}</td>
+        <td><label><input type="checkbox" data-active="${s.id}" ${s.active ? 'checked' : ''}> ${s.active ? 'oui' : 'non'}</label></td></tr>`;
+    }).join('');
+
+  // ---------- tickets papier
+  const keep = $('pPricing').value;
+  $('pPricing').innerHTML = d.stock.map((s) => `<option value="${s.id}">${esc(s.label)} — ${F(s.price)}</option>`).join('');
+  if (keep) $('pPricing').value = keep;
+  $('aff').href = 'affiche.html?zone=' + encodeURIComponent($('zone').value);
+  const lots = await api('/paper?zone=' + encodeURIComponent($('zone').value)).catch(() => []);
+  $('lots').innerHTML = lots.length ? `<tr><th>Créé le</th><th>Lot</th><th>Forfait</th><th class="n">Tickets</th><th class="n">Valeur</th><th>Routeur</th><th></th></tr>` +
+    lots.map((l) => `<tr><td>${dt(l.created_at)}</td><td class="muted">${esc(l.lot)}</td><td>${esc(l.label)}</td>
+      <td class="n">${l.qty}</td><td class="n">${F(l.qty * l.price)}</td>
+      <td>${l.on_router === l.qty ? '<span class="chip success">prêt</span>' : `<span class="chip pending">${l.on_router}/${l.qty}</span>`}</td>
+      <td><a href="tickets-papier.html?lot=${encodeURIComponent(l.lot)}" target="_blank"><button class="small" type="button">🖨 Imprimer</button></a></td></tr>`).join('')
+    : '<tr><td class="muted">Aucun lot papier pour l\'instant.</td></tr>';
+
+  // ---------- paiements
+  $('recent').innerHTML = `<tr><th>Date</th><th>Téléphone</th><th>Forfait</th><th class="n">Montant</th><th>Opérateur</th><th>Statut</th><th>Ticket</th></tr>` +
+    (d.recent.length ? d.recent.map((p) => `<tr><td>${dt(p.created_at)}</td><td>${esc(p.phone)}</td><td>${esc(p.label)}</td>
+      <td class="n">${F(p.amount)}</td><td>${esc(OPS[p.method] || p.method || '—')}</td>
+      <td><span class="chip ${esc(p.status)}">${STAT[p.status] || esc(p.status)}</span>
+        ${p.status === 'pending' ? `<button class="small ghost" data-recheck="${esc(p.id)}">Vérifier</button>` : ''}</td>
+      <td><b>${esc(p.code || '')}</b></td></tr>`).join('')
+      : '<tr><td colspan="7" class="muted">Aucun paiement pour l\'instant.</td></tr>');
+}
+
+function bars(id, rows) {
+  const max = Math.max(1, ...rows.map((r) => r[1]));
+  $(id).innerHTML = rows.length ? rows.map(([lab, v, n]) => `<div class="bar"><div class="lab" title="${esc(lab)}">${esc(lab)}</div>
+    <div class="trk"><div class="fill" style="width:${Math.max(2, v / max * 100)}%"></div></div>
+    <div class="val">${F(v)}<div class="muted" style="font-weight:400;font-size:12px">${n} ticket(s)</div></div></div>`).join('')
+    : '<p class="muted">Pas encore de ventes sur la période.</p>';
+}
+
+function chart(days) {
+  const svg = $('svg'), W = svg.clientWidth || 800, H = 220, pl = 52, pb = 26, pt = 10;
+  const max = Math.max(1000, ...days.map((d) => d.gross));
+  const step = Math.pow(10, Math.floor(Math.log10(max))); const top = Math.ceil(max / step) * step;
+  const bw = (W - pl - 8) / days.length;
+  const y = (v) => pt + (H - pt - pb) * (1 - v / top);
+  let g = '';
+  for (let i = 0; i <= 4; i++) { const v = top * i / 4;
+    g += `<line x1="${pl}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/>
+          <text x="${pl - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${v >= 1000 ? (v / 1000).toLocaleString('fr-FR') + 'k' : v}</text>`; }
+  const every = Math.ceil(days.length / 8);
+  days.forEach((d, i) => {
+    const x = pl + i * bw, h = (H - pt - pb) * d.gross / top;
+    g += `<rect x="${x + bw * 0.15}" y="${y(d.gross)}" width="${Math.max(1, bw * 0.7)}" height="${Math.max(0, h)}" rx="2" fill="var(--c1)" data-i="${i}"><title>${d.day} : ${F(d.gross)}</title></rect>`;
+    g += `<rect x="${x}" y="${pt}" width="${bw}" height="${H - pt - pb}" fill="transparent" data-i="${i}"/>`;
+    const last = days.length - 1;
+    if ((i % every === 0 && last - i >= every / 2) || i === last)
+      g += `<text x="${x + bw / 2}" y="${H - 8}" text-anchor="middle" font-size="11" fill="var(--muted)">${d.day.slice(8, 10)}/${d.day.slice(5, 7)}</text>`;
+  });
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.innerHTML = g;
+  const show = (e) => { const i = e.target.dataset?.i; if (i === undefined) return; const d = days[i];
+    $('tip').textContent = `${new Date(d.day).toLocaleDateString('fr-FR', { weekday:'long', day:'numeric', month:'long' })} : ${F(d.gross)} brut · ${F(d.net)} net · ${d.tickets} ticket(s)`; };
+  svg.onmousemove = show; svg.onclick = show;
+}
+
+// ---------- actions
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('button[data-resolve],button[data-recheck]'); if (!b) return;
+  b.disabled = true;
+  try {
+    if (b.dataset.resolve) { const r = await api('/resolve/' + b.dataset.resolve, { method:'POST' });
+      alert('Ticket attribué : ' + r.code + '\nIl s\'affichera aussi au client dans « Retrouver mon ticket ».'); }
+    else await api('/recheck/' + b.dataset.recheck, { method:'POST' });
+    load();
+  } catch (err) { if (err.message !== '401') alert(err.message); b.disabled = false; }
+});
+document.addEventListener('change', async (e) => {
+  const t = e.target;
+  try {
+    if (t.dataset.price) { await api('/pricing/' + t.dataset.price, { method:'PATCH', body: JSON.stringify({ price: parseInt(t.value, 10) }) }); t.style.borderColor = 'var(--ok)'; }
+    if (t.dataset.active) { await api('/pricing/' + t.dataset.active, { method:'PATCH', body: JSON.stringify({ active: t.checked }) }); load(); }
+  } catch (err) { if (err.message !== '401') { alert(err.message); load(); } }
+});
+$('pMake').onclick = async () => {
+  const qty = parseInt($('pQty').value, 10);
+  const label = $('pPricing').selectedOptions[0]?.textContent || '';
+  if (!confirm(`Créer ${qty} tickets papier « ${label} » ?\nIls seront ajoutés au routeur et valables dès qu'on les tape.`)) return;
+  $('pMake').disabled = true;
+  try {
+    const r = await api('/paper', { method:'POST', body: JSON.stringify({ zoneId: $('zone').value, pricingId: parseInt($('pPricing').value, 10), qty }) });
+    alert(`Lot ${r.lot} créé (${r.qty} tickets).\nAttends la prochaine synchro du routeur (2 min) puis clique « Imprimer ».`);
+    load();
+  } catch (err) { if (err.message !== '401') alert(err.message); }
+  $('pMake').disabled = false;
+};
+$('csv').onclick = async () => {
+  try {
+    const blob = await api(`/export.csv?zone=${encodeURIComponent($('zone').value)}&days=${$('days').value}`);
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `ventes-${$('days').value}j.csv`; a.click();
+  } catch (err) { if (err.message !== '401') alert(err.message); }
+};
+window.addEventListener('resize', () => { clearTimeout(window._r); window._r = setTimeout(load, 300); });
+
+PW ? start().catch(() => logout()) : logout();
+</script>
+</body></html>

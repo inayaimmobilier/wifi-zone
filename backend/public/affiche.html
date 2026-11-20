@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Affiche Wi-Fi Zone</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<style>
+:root{--c1:#126B57;--c1d:#0b4a3c;--c2:#E3A23B;--ink:#16201c}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:#e9ecea;color:var(--ink)}
+.bar{background:#fff;border-bottom:1px solid #dde3df;padding:12px 16px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:end}
+.bar label{display:flex;flex-direction:column;font-size:12px;font-weight:700;color:#5b655f;gap:3px}
+.bar input,.bar select{font:inherit;font-size:14px;padding:7px 9px;border:1px solid #cfd8d3;border-radius:8px;min-width:0}
+.bar button{font:inherit;background:var(--c1);color:#fff;border:0;border-radius:8px;padding:9px 16px;font-weight:800;cursor:pointer}
+.wrap{padding:16px;overflow:auto}
+/* ------- affiche (dimensionnée en mm, s'agrandit en A3 à l'impression) ------- */
+.poster{width:210mm;height:297mm;margin:0 auto;background:#fff;display:flex;flex-direction:column;overflow:hidden;
+  box-shadow:0 4px 24px rgba(0,0,0,.15);font-size:4.2mm}
+.top{background:var(--c1);color:#fff;padding:12mm 12mm 9mm;position:relative}
+.top::after{content:"";position:absolute;left:0;right:0;bottom:-6mm;height:12mm;background:var(--c1);border-radius:0 0 50% 50%/0 0 100% 100%}
+.top .kicker{font-weight:800;letter-spacing:.3em;font-size:3.6mm;color:var(--c2);text-transform:uppercase}
+.top h1{margin:2mm 0 1mm;font-size:19mm;line-height:.95;font-weight:900;letter-spacing:-.02em}
+.top p{margin:0;font-size:5.2mm;opacity:.92}
+.steps{display:grid;grid-template-columns:1fr 1fr;gap:6mm;padding:13mm 12mm 6mm}
+.step{border:0.6mm solid #e1e7e4;border-radius:5mm;padding:5mm;display:flex;flex-direction:column;align-items:center;text-align:center;gap:2.5mm}
+.num{width:10mm;height:10mm;border-radius:50%;background:var(--c2);color:#1d1300;font-weight:900;font-size:5.5mm;display:grid;place-items:center}
+.step h2{margin:0;font-size:6.4mm;line-height:1.15}
+.step .qr{width:56mm;height:56mm}
+.step .qr svg{width:100%;height:100%;display:block}
+.step small{font-size:3.6mm;color:#4a5550}
+.ssid{font-family:ui-monospace,Consolas,monospace;font-weight:900;background:#eef5f2;color:var(--c1d);padding:1mm 3mm;border-radius:2mm;font-size:5mm}
+.ops{display:flex;flex-wrap:wrap;justify-content:center;gap:1.5mm}
+.ops span{border:0.4mm solid #cfd8d3;border-radius:10mm;padding:.6mm 2.5mm;font-size:3.3mm;font-weight:700}
+.prices{margin:2mm 12mm 0;display:grid;grid-template-columns:repeat(var(--n),1fr);gap:3mm}
+.price{background:var(--c1d);color:#fff;border-radius:4mm;padding:6mm 2mm;text-align:center}
+.price .d{font-size:4.6mm;font-weight:700;opacity:.9}
+.price .p{font-size:12mm;font-weight:900;line-height:1.05;color:var(--c2)}
+.price .p small{font-size:4.5mm;color:#fff}
+.go{margin:7mm 12mm 0;background:#fff7e8;border-radius:4mm;padding:5mm 6mm;display:flex;gap:4mm;align-items:center;font-size:5mm}
+.go .num{flex:none}
+.foot{margin-top:auto;padding:5mm 12mm 8mm;display:flex;justify-content:space-between;align-items:end;gap:6mm;font-size:4mm;border-top:0.5mm dashed #dfe5e2}
+.foot b{font-size:5.2mm;color:var(--c1)}
+@media print{
+  @page{size:var(--page,A4);margin:0}
+  body{background:#fff}
+  .bar{display:none}.wrap{padding:0}
+  .poster{box-shadow:none;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body.a3 .poster{zoom:1.414}
+}
+@media screen and (max-width:860px){.poster{zoom:.45}}
+</style></head>
+<body>
+<div class="bar">
+  <label>Nom de la zone<input id="name" value="VILLAGE WI-FI"></label>
+  <label>Nom du Wi-Fi (SSID)<input id="ssid" value="VILLAGE-WIFI"></label>
+  <label>Slogan<input id="slogan" value="Internet haut débit par satellite, partout au village" size="38"></label>
+  <label>WhatsApp<input id="wa" value="07 00 00 00 00" size="14"></label>
+  <label>Format<select id="fmt"><option value="A4">A4</option><option value="A3">A3 (grand)</option></select></label>
+  <button id="print">🖨 Imprimer / PDF</button>
+</div>
+<div class="wrap">
+  <div class="poster" id="poster">
+    <div class="top">
+      <div class="kicker">Wi-Fi Zone</div>
+      <h1 id="pName"></h1>
+      <p id="pSlogan"></p>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="num">1</div>
+        <h2>Connectez-vous au Wi-Fi</h2>
+        <div class="qr" id="qrWifi"></div>
+        <span class="ssid" id="pSsid"></span>
+        <small>Scannez avec l'appareil photo, ou choisissez ce réseau dans les réglages Wi-Fi</small>
+      </div>
+      <div class="step">
+        <div class="num">2</div>
+        <h2>Achetez votre ticket</h2>
+        <div class="qr" id="qrBuy"></div>
+        <div class="ops"><span>Orange Money</span><span>MTN MoMo</span><span>Moov Money</span><span>Wave</span></div>
+        <small>La page s'ouvre toute seule. Votre code arrive en quelques secondes.</small>
+      </div>
+    </div>
+    <div class="prices" id="prices"></div>
+    <div class="go"><div class="num">3</div><div><b>Touchez « Me connecter maintenant »</b> ou entrez votre code sur la page Wi-Fi. C'est parti !</div></div>
+    <div class="foot">
+      <div>Tickets papier aussi en vente<br>chez nos revendeurs du village</div>
+      <div style="text-align:right">Besoin d'aide ? WhatsApp<br><b id="pWa"></b></div>
+    </div>
+  </div>
+</div>
+<script>
+const q = new URLSearchParams(location.search);
+let zoneId = q.get('zone'); try { zoneId = zoneId || localStorage.getItem('zone'); } catch (e) {}
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const KEYS = ['name', 'ssid', 'slogan', 'wa', 'fmt'];
+try { const s = JSON.parse(localStorage.getItem('affiche') || '{}'); KEYS.forEach((k) => { if (s[k]) $(k).value = s[k]; }); } catch (e) {}
+let offers = [];
+
+function qr(text) {
+  if (typeof qrcode !== 'function') return '<p style="font-size:3mm">QR indisponible (connexion internet requise pour générer l\'affiche)</p>';
+  const c = qrcode(0, 'M'); c.addData(text); c.make();
+  return c.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+}
+const wifiEsc = (s) => s.replace(/([\\;,:"])/g, '\\$1');
+
+function render() {
+  const v = Object.fromEntries(KEYS.map((k) => [k, $(k).value.trim()]));
+  try { localStorage.setItem('affiche', JSON.stringify(v)); } catch (e) {}
+  $('pName').textContent = v.name; $('pSlogan').textContent = v.slogan;
+  $('pSsid').textContent = v.ssid; $('pWa').textContent = v.wa;
+  $('qrWifi').innerHTML = qr(`WIFI:T:nopass;S:${wifiEsc(v.ssid)};;`);
+  $('qrBuy').innerHTML = qr(`${location.origin}/acheter.html?zone=${zoneId || ''}`);
+  const list = offers.length ? offers : [{ label:'1 heure', price:100 }, { label:'24 heures', price:200 }, { label:'7 jours', price:1000 }, { label:'30 jours', price:3000 }];
+  $('prices').style.setProperty('--n', Math.min(list.length, 4));
+  $('prices').innerHTML = list.slice(0, 4).map((o) =>
+    `<div class="price"><div class="d">${esc(o.label)}</div><div class="p">${o.price.toLocaleString('fr-FR')}<small> F</small></div></div>`).join('');
+  document.body.classList.toggle('a3', v.fmt === 'A3');
+  document.documentElement.style.setProperty('--page', v.fmt);
+  let st = document.getElementById('pagesize');
+  if (!st) { st = document.createElement('style'); st.id = 'pagesize'; document.head.appendChild(st); }
+  st.textContent = `@media print{@page{size:${v.fmt === 'A3' ? 'A3' : 'A4'};margin:0}}`;
+}
+KEYS.forEach((k) => $(k).addEventListener('input', render));
+$('print').onclick = () => window.print();
+
+if (zoneId) fetch('/api/zones/' + encodeURIComponent(zoneId)).then((r) => r.json()).then((d) => {
+  if (d.zone) { if (!localStorage.getItem('affiche')) $('name').value = d.zone.name; offers = d.offers || []; if (d.zone.support_phone && !localStorage.getItem('affiche')) $('wa').value = d.zone.support_phone; }
+  render();
+}).catch(render); else render();
+</script>
+</body></html>

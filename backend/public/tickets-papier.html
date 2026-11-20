@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Tickets papier — impression</title>
+<style>
+:root{--c1:#126B57;--c2:#E3A23B}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:#e9ecea;color:#1d2421}
+.bar{position:sticky;top:0;background:#fff;border-bottom:1px solid #dde3df;padding:12px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;z-index:2}
+.bar b{color:var(--c1)}
+.bar .msg{font-size:14px}
+.bar .warn{color:#9b1c1c;font-weight:700}
+button{font:inherit;background:var(--c1);color:#fff;border:0;border-radius:8px;padding:10px 16px;font-weight:700;cursor:pointer}
+button:disabled{opacity:.5}
+/* Planche A4 : 4 colonnes x 10 lignes = 40 tickets par page (48 x 27 mm) */
+.page{width:210mm;min-height:297mm;margin:16px auto;background:#fff;padding:8mm 9mm;
+  display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:27.4mm;box-shadow:0 2px 12px rgba(0,0,0,.12)}
+.t{border:1px dashed #9aa5a0;margin:-0.5px;padding:2mm 2.5mm;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden}
+.t .h{display:flex;justify-content:space-between;align-items:baseline;font-size:7.5pt;font-weight:800;color:var(--c1);white-space:nowrap}
+.t .h span:last-child{background:var(--c2);color:#1d1300;border-radius:3px;padding:0 3px}
+.t .code{font-family:ui-monospace,Consolas,"Courier New",monospace;font-size:17pt;font-weight:900;letter-spacing:2.5px;text-align:center;line-height:1}
+.t .f{font-size:6.3pt;color:#3b4541;line-height:1.25;text-align:center}
+.t .f b{color:#1d2421}
+@media print{
+  @page{size:A4;margin:0}
+  body{background:#fff}
+  .bar{display:none}
+  .page{margin:0;box-shadow:none;page-break-after:always;break-after:page}
+  .page:last-child{page-break-after:auto;break-after:auto}
+  .t{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+@media (max-width:820px){.page{transform-origin:top left;transform:scale(calc(100vw / 230mm));margin:8px}}
+</style></head>
+<body>
+<div class="bar">
+  <div class="msg" id="msg">Chargement…</div>
+  <div>
+    <label style="font-size:14px">Nom du Wi-Fi : <input id="ssid" value="VILLAGE-WIFI" style="font:inherit;padding:6px;width:150px"></label>
+    <button id="print" disabled>🖨 Imprimer</button>
+  </div>
+</div>
+<div id="pages"></div>
+<script>
+const lot = new URLSearchParams(location.search).get('lot');
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let PW = ''; try { PW = sessionStorage.getItem('pw') || ''; } catch (e) {}
+try { const s = localStorage.getItem('ssid'); if (s) $('ssid').value = s; } catch (e) {}
+let data;
+
+function render() {
+  const ssid = esc($('ssid').value.trim() || 'VILLAGE-WIFI');
+  const help = data.support ? ` · Aide : ${esc(data.support)}` : '';
+  const one = (c) => `<div class="t">
+      <div class="h"><span>${esc(data.zone)}</span><span>${esc(data.label)} · ${data.price.toLocaleString('fr-FR')} F</span></div>
+      <div class="code">${esc(c)}</div>
+      <div class="f">Wi-Fi <b>${ssid}</b> → entrez ce code${help}</div></div>`;
+  let html = '';
+  for (let i = 0; i < data.codes.length; i += 40)
+    html += `<section class="page">${data.codes.slice(i, i + 40).map(one).join('')}</section>`;
+  $('pages').innerHTML = html;
+}
+
+async function load() {
+  if (!PW) { $('msg').innerHTML = '<span class="warn">Connecte-toi d\'abord au tableau de bord (admin.html), puis reviens.</span>'; return; }
+  const r = await fetch('/api/admin/paper/' + encodeURIComponent(lot), { headers: { Authorization: 'Bearer ' + PW } });
+  const d = await r.json();
+  if (!r.ok) { $('msg').innerHTML = `<span class="warn">${esc(d.error)}</span>`; return; }
+  data = d; render();
+  const pages = Math.ceil(d.codes.length / 40);
+  const ready = d.on_router === d.codes.length;
+  $('msg').innerHTML = `Lot <b>${esc(d.lot)}</b> · ${d.codes.length} tickets « ${esc(d.label)} » · ${pages} page(s) A4 · ` +
+    (ready ? '✅ tous les codes sont sur le routeur'
+           : `<span class="warn">⏳ ${d.on_router}/${d.codes.length} codes sur le routeur — attends la prochaine synchro (2 min) avant d'imprimer</span>`);
+  $('print').disabled = !ready;
+  if (!ready) setTimeout(load, 20000);
+}
+$('ssid').oninput = () => { try { localStorage.setItem('ssid', $('ssid').value); } catch (e) {} if (data) render(); };
+$('print').onclick = () => window.print();
+load();
+</script>
+</body></html>

@@ -1,0 +1,30 @@
+# Déploiement Render en 1 clic (New > Blueprint > ce dépôt)
+# Render demande ensuite les valeurs secrètes marquées "sync: false".
+services:
+  - type: web
+    name: wifi-zone
+    runtime: node
+    rootDir: backend
+    plan: starter            # le plan gratuit s'endort : les clients attendraient ~1 min
+    region: frankfurt
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL           # Supabase > Connect > Session pooler (URI)
+        sync: false
+      - key: MONEROO_SECRET_KEY     # Moneroo > Developers > API Keys (test_... pour commencer)
+        sync: false
+      - key: MONEROO_WEBHOOK_SECRET # Moneroo > Developers > Webhooks
+        sync: false
+      - key: ADMIN_PASSWORD         # mot de passe du tableau de bord, 10 caractères minimum
+        sync: false
+      - key: STOCK_TARGET
+        value: "60"
+      - key: COMMISSION_PERCENT
+        value: "2"
+      # PUBLIC_URL : inutile tant que tu utilises l'adresse xxx.onrender.com.
+      # Ajoute-la (https://tondomaine.com) quand tu auras un nom de domaine.

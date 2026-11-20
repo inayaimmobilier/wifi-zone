@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Votre ticket Wi-Fi</title><link rel="stylesheet" href="style.css"></head>
+<body><div class="wrap"><div class="card center" id="box">
+  <div class="spin"></div>
+  <p>Confirmation du paiement en cours…<br>
+  <span class="muted">Validez la demande sur votre téléphone si ce n'est pas encore fait.</span></p>
+</div></div>
+<script>
+const q = new URLSearchParams(location.search);
+let pid = q.get('pid') || q.get('payment_id');
+try { pid = pid || localStorage.getItem('lastPayment'); } catch (e) {}
+const login = q.get('login');
+const box = document.getElementById('box');
+let tries = 0;
+const show = (html) => { box.innerHTML = html; };
+
+async function poll() {
+  tries++;
+  try {
+    const d = await (await fetch('/api/payment/' + encodeURIComponent(pid))).json();
+    if (d.code) {
+      const code = d.code.replace(/[^A-Z0-9]/g, '');
+      // Connexion en 1 clic : le hotspot MikroTik accepte /login?username=..&password=.. (HTTP PAP)
+      const auto = /^http:\/\/[a-z0-9.-]+(:\d+)?\/login$/i.test(login || '')
+        ? login + '?username=' + code + '&password=' + code : null;
+      show('<p>✅ Paiement reçu — ' + d.label.replace(/[<>&]/g, '') + '</p>' +
+        '<p class="muted">Votre code Wi-Fi :</p><div class="code">' + code + '</div>' +
+        '<p class="muted">Notez-le ou faites une capture d\'écran.</p>' +
+        (auto ? '<a class="btn" href="' + auto + '">Me connecter maintenant</a>'
+              : '<p>Retournez sur la page Wi-Fi et entrez ce code.</p>'));
+      return;
+    }
+    if (d.status === 'failed' || d.status === 'cancelled')
+      return show('<p>❌ Le paiement n\'a pas abouti. Aucun montant n\'a été prélevé.</p>' +
+                  '<a class="btn" href="javascript:history.go(-2)">Réessayer</a>');
+    if (d.status === 'paid_no_stock')
+      return show('<p>Paiement reçu, mais plus aucun ticket disponible pour ce forfait. ' +
+                  'Contactez le support WhatsApp : vous serez servi ou remboursé.</p>');
+  } catch (e) {}
+  if (tries < 100) setTimeout(poll, 3000);
+  else show('<p>Le paiement prend du temps. Revenez plus tard sur « Retrouver mon ticket » avec votre numéro.</p>');
+}
+pid ? poll() : show('<p>Aucun paiement en cours.</p>');
+</script></body></html>

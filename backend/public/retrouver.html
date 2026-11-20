@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Retrouver mon ticket</title><link rel="stylesheet" href="style.css"></head>
+<body><div class="wrap">
+  <h1>Retrouver mon ticket</h1>
+  <div class="card">
+    <label for="phone">Numéro utilisé pour payer</label>
+    <input id="phone" type="tel" inputmode="numeric">
+    <label for="amount" style="margin-top:12px">Montant payé (F CFA)</label>
+    <input id="amount" type="number" inputmode="numeric" placeholder="200">
+    <button class="btn" id="go">Rechercher</button>
+    <div id="res"></div>
+  </div>
+</div>
+<script>
+const zoneId = new URLSearchParams(location.search).get('zone');
+const res = document.getElementById('res');
+try { document.getElementById('phone').value = localStorage.getItem('tel') || ''; } catch (e) {}
+document.getElementById('go').onclick = async () => {
+  res.textContent = 'Recherche…';
+  try {
+    const r = await fetch('/api/recover', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ zoneId, phone: document.getElementById('phone').value,
+                             amount: document.getElementById('amount').value })
+    });
+    const d = await r.json();
+    if (!r.ok) { res.textContent = d.error || 'Erreur'; return; }
+    if (!d.tickets.length) { res.textContent = 'Aucun ticket trouvé pour ce numéro et ce montant.'; return; }
+    res.innerHTML = '';
+    d.tickets.forEach(t => {
+      const c = document.createElement('div'); c.className = 'code'; c.textContent = t.code;
+      const p = document.createElement('p'); p.className = 'center muted';
+      p.textContent = t.label + ' — ' + new Date(t.date).toLocaleString('fr-FR');
+      res.append(c, p);
+    });
+  } catch (e) { res.textContent = 'Connexion impossible.'; }
+};
+</script></body></html>

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Acheter un ticket Wi-Fi</title><link rel="stylesheet" href="style.css"></head>
+<body><div class="wrap">
+  <h1 id="zname">Wi-Fi</h1>
+  <p class="sub">Choisissez votre forfait, payez par Mobile Money, recevez votre code tout de suite.</p>
+  <div id="offers"></div>
+  <div class="card">
+    <label for="phone">Votre numéro Mobile Money</label>
+    <input id="phone" type="tel" inputmode="numeric" placeholder="07 00 00 00 00" autocomplete="tel">
+    <button id="pay" class="btn alt" disabled>Choisissez un forfait</button>
+    <div id="err"></div>
+  </div>
+  <p class="center muted">Vous recevrez une demande de confirmation sur votre téléphone.<br>
+    <a id="rec" href="retrouver.html">Retrouver un ticket déjà payé</a></p>
+</div>
+<script>
+const q = new URLSearchParams(location.search);
+const zoneId = q.get('zone'), login = q.get('login') || '';
+let chosen = null;
+const el = (id) => document.getElementById(id);
+const fcfa = (n) => n.toLocaleString('fr-FR') + ' F';
+function err(m) {
+  el('err').innerHTML = '';
+  if (m) { const d = document.createElement('div'); d.className = 'err'; d.textContent = m; el('err').appendChild(d); }
+}
+try { const saved = localStorage.getItem('tel'); if (saved) el('phone').value = saved; } catch (e) {}
+el('rec').href = 'retrouver.html?zone=' + encodeURIComponent(zoneId || '');
+
+fetch('/api/zones/' + encodeURIComponent(zoneId)).then(r => r.json()).then(d => {
+  if (d.error) return err(d.error);
+  el('zname').textContent = d.zone.name; document.title = 'Acheter — ' + d.zone.name;
+  el('offers').innerHTML = '';
+  d.offers.forEach(o => {
+    const b = document.createElement('button');
+    b.className = 'offer'; b.disabled = !o.available;
+    const name = document.createElement('span'); name.textContent = o.label + (o.available ? '' : ' (épuisé)');
+    const price = document.createElement('b'); price.textContent = fcfa(o.price);
+    b.append(name, price);
+    b.onclick = () => {
+      chosen = o;
+      document.querySelectorAll('.offer').forEach(x => x.classList.remove('sel'));
+      b.classList.add('sel');
+      el('pay').disabled = false; el('pay').textContent = 'Payer ' + fcfa(o.price);
+    };
+    el('offers').appendChild(b);
+  });
+}).catch(() => err('Connexion impossible. Réessayez.'));
+
+el('pay').onclick = async () => {
+  err('');
+  const phone = el('phone').value.trim();
+  if (phone.replace(/\D/g, '').length < 8) return err('Entrez votre numéro Mobile Money.');
+  try { localStorage.setItem('tel', phone); } catch (e) {}
+  el('pay').disabled = true; el('pay').textContent = 'Redirection vers le paiement…';
+  try {
+    const r = await fetch('/api/pay', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ zoneId, pricingId: chosen.id, phone, login })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Erreur');
+    try { localStorage.setItem('lastPayment', d.payment_id); } catch (e) {}
+    location.href = d.checkout_url;
+  } catch (e) {
+    err(e.message);
+    el('pay').disabled = false; el('pay').textContent = 'Payer ' + fcfa(chosen.price);
+  }
+};
+</script></body></html>

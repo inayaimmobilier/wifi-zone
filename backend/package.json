@@ -1,0 +1,19 @@
+{
+  "name": "wifi-zone-village",
+  "version": "1.0.0",
+  "description": "Vente automatique de tickets Wi-Fi MikroTik payés en Mobile Money (Moneroo)",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "zone:create": "node scripts/create-zone.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.4.1",
+    "pg": "^8.13.1"
+  }
+}
