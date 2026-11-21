@@ -82,6 +82,18 @@ app.get('/api/cinetpay/notify', (_, res) => res.status(200).send('ok')); // test
 
 app.use(express.json({ limit: '20kb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
+// Accueil : envoie vers la page d'achat (directement s'il n'y a qu'une zone)
+app.get('/', async (_, res) => {
+  try {
+    const { rows } = await db.query('select id, name from zones order by name');
+    if (rows.length === 1) return res.redirect('/acheter.html?zone=' + rows[0].id);
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    res.send(`<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wi-Fi</title><link rel="stylesheet" href="style.css"></head><body><div class="wrap"><h1>Choisissez votre zone Wi-Fi</h1>
+${rows.map((z) => `<a class="offer" href="acheter.html?zone=${z.id}"><span>${esc(z.name)}</span></a>`).join('') || '<p>Aucune zone.</p>'}
+</div></body></html>`);
+  } catch (e) { res.status(500).send('Erreur'); }
+});
 app.get('/api/health', (_, res) => res.json({ status: 'ok', paiement: cinetpay.isSandbox() ? 'bac a sable' : 'production' }));
 
 // ============================================================ API PUBLIQUE CLIENT

@@ -17,6 +17,7 @@
 <script>
 const q = new URLSearchParams(location.search);
 const zoneId = q.get('zone'), login = q.get('login') || '';
+if (!zoneId) location.replace('/');
 let chosen = null;
 const el = (id) => document.getElementById(id);
 const fcfa = (n) => n.toLocaleString('fr-FR') + ' F';
