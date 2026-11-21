@@ -14,8 +14,8 @@
 :global ZONENAME   "VILLAGE-WIFI"          ;# Nom du Wi-Fi (SSID)
 :global DNSNAME    "login.wifi"            ;# Adresse du portail (ne doit PAS exister sur internet)
 :global ADMINPASS  "ChangeMoi-Tres-Long!"  ;# Mot de passe admin du routeur
-:global APIDOMAIN  "api.mazone.com"        ;# Ton serveur de paiement (backend)
-:global SITEDOMAIN "mazone.com"            ;# Ton site d'achat
+:global APIDOMAIN  "wifi-zone-production.up.railway.app"   ;# Ton serveur de paiement (backend)
+:global SITEDOMAIN "wifi-zone-production.up.railway.app"   ;# Ton site d'achat
 
 # ---------- 1. Sécurité de base ----------
 /user set admin password=$ADMINPASS

@@ -13,7 +13,7 @@
 #  serveur (commande : npm run zone:create), puis colle dans le Terminal.
 # =====================================================================
 
-:global SYNCURL "https://api.mazone.com/api/router/sync?zone=02a78989-c240-4dd4-b724-b1e30e93dd27&token=ROUTER_TOKEN"
+:global SYNCURL "https://wifi-zone-production.up.railway.app/api/router/sync?zone=02a78989-c240-4dd4-b724-b1e30e93dd27&token=ROUTER_TOKEN"
 
 # Faire confiance aux certificats HTTPS publics (RouterOS 7.19+)
 :do { /certificate settings set builtin-trust-anchors=trusted } on-error={}
