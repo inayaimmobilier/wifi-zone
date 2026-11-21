@@ -4,8 +4,11 @@
 //  MikroTik <- /api/router/sync (le routeur vient chercher ses tickets)
 // =====================================================================
 require('dotenv').config();
-// Sur Render sans nom de domaine : on prend l'adresse publique fournie par Render
-if (!process.env.PUBLIC_URL && process.env.RENDER_EXTERNAL_URL) process.env.PUBLIC_URL = process.env.RENDER_EXTERNAL_URL;
+// Adresse publique : PUBLIC_URL, sinon celle fournie par Render ou Railway
+if (!process.env.PUBLIC_URL) {
+  const auto = process.env.RENDER_EXTERNAL_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "");
+  if (auto) process.env.PUBLIC_URL = auto;
+}
 const path = require('path');
 const crypto = require('crypto');
 const express = require('express');

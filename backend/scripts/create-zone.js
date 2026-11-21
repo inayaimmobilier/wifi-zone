@@ -1,7 +1,11 @@
 // Crée ta zone + les 4 forfaits, puis affiche ZONE_ID et ROUTER_TOKEN
 //   npm run zone:create -- "VILLAGE WI-FI" CI 2250700000000
 require('dotenv').config();
-if (!process.env.PUBLIC_URL && process.env.RENDER_EXTERNAL_URL) process.env.PUBLIC_URL = process.env.RENDER_EXTERNAL_URL;
+// Adresse publique : PUBLIC_URL, sinon celle fournie par Render ou Railway
+if (!process.env.PUBLIC_URL) {
+  const auto = process.env.RENDER_EXTERNAL_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "");
+  if (auto) process.env.PUBLIC_URL = auto;
+}
 const { Pool } = require('pg');
 const db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: /@(localhost|127.0.0.1)[:/]/.test(process.env.DATABASE_URL) ? false : { rejectUnauthorized: false } });
 
