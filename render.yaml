@@ -16,15 +16,15 @@ services:
         value: "22"
       - key: DATABASE_URL           # Supabase > Connect > Session pooler (URI)
         sync: false
-      - key: MONEROO_SECRET_KEY     # Moneroo > Developers > API Keys (test_... pour commencer)
+      - key: CINETPAY_API_KEY       # CinetPay > clés API (sk_test_... pour commencer)
         sync: false
-      - key: MONEROO_WEBHOOK_SECRET # Moneroo > Developers > Webhooks
+      - key: CINETPAY_API_PASSWORD  # CinetPay > mot de passe API associé à la clé
         sync: false
       - key: ADMIN_PASSWORD         # mot de passe du tableau de bord, 10 caractères minimum
         sync: false
       - key: STOCK_TARGET
         value: "60"
       - key: COMMISSION_PERCENT
-        value: "2"
+        value: "3"
       # PUBLIC_URL : inutile tant que tu utilises l'adresse xxx.onrender.com.
       # Ajoute-la (https://tondomaine.com) quand tu auras un nom de domaine.

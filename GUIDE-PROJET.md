@@ -25,8 +25,8 @@ Starlink + MikroTik + points d'accès + paiement Mobile Money + tickets automati
 **Le parcours du client :**
 1. Il se connecte au Wi-Fi « VILLAGE WI-FI » → la page du portail s'ouvre toute seule.
 2. Il touche **« Acheter un ticket »** → il choisit 1 h / 24 h / 7 j / 30 j et saisit son numéro.
-3. Moneroo affiche Orange Money / MTN / Moov / Wave → il valide sur son téléphone.
-4. Moneroo prévient ton serveur (webhook signé) → le serveur attribue un ticket **en une seule opération**.
+3. CinetPay affiche Orange Money / MTN / Moov / Wave → il valide sur son téléphone.
+4. CinetPay prévient ton serveur (notification avec jeton secret, puis vérification du statut) → le serveur attribue un ticket **en une seule opération**.
 5. Le code s'affiche → bouton **« Me connecter maintenant »** → internet est ouvert. Aucun geste de ta part.
 
 **Ce que j'ai ajouté par rapport à ta formation :** dans la formation, il faut générer les tickets
@@ -83,7 +83,7 @@ Il faut une **dorsale radio** et des **points d'accès d'extérieur** en hauteur
 3. **Autorisation** : revendre de l'accès internet peut demander une déclaration ou une licence
    auprès du régulateur télécom (ARTCI en Côte d'Ivoire, ARCEP au Bénin, AMRTP au Mali…). Renseigne-toi
    avant le lancement commercial.
-4. **Moneroo** : crée le compte et lance la **vérification d'identité (KYC) tout de suite**.
+4. **CinetPay** : crée le compte marchand sur cinetpay.com et lance la **vérification d'identité (KYC) tout de suite**.
    Elle peut prendre plusieurs jours.
 5. **Nom de domaine** (ex. `mazone.com`), 8–15 $ par an.
 
@@ -125,7 +125,7 @@ Ce script configure :
 * l'**anti-partage de connexion** (TTL = 1) ;
 * le **hotspot** avec connexion CHAP + PAP + cookie (le client n'a pas à retaper son code chaque jour) ;
 * les forfaits **1H / 24H / 7J / 30J** avec un débit maximum par client ;
-* le **walled garden**, c'est-à-dire les sites accessibles sans ticket : ton site d'achat et Moneroo
+* le **walled garden**, c'est-à-dire les sites accessibles sans ticket : ton site d'achat et CinetPay
   (sinon le client ne peut pas payer) ;
 * le **partage équitable** du débit Starlink entre tous les clients (PCQ) ;
 * la surveillance de la connexion Starlink et le nettoyage automatique des tickets épuisés.
@@ -179,7 +179,7 @@ Je peux te préparer les scripts de configuration exacts de chaque radio quand t
 
 ## 7. Étape 5 : le serveur de paiement (dossier `backend/`)
 
-Une seule application Node.js qui fait **tout** : site d'achat, API, webhook Moneroo et synchro du routeur.
+Une seule application Node.js qui fait **tout** : site d'achat, API, notifications CinetPay et synchro du routeur.
 C'est plus simple que la formation : pas de site séparé à héberger sur Vercel.
 
 ### 7.1 Base de données (Supabase)
@@ -187,10 +187,13 @@ C'est plus simple que la formation : pas de site séparé à héberger sur Verce
 2. *SQL Editor* → colle tout [schema.sql](backend/schema.sql) → **Run**.
 3. *Project Settings → Database → Connection string (URI, Session pooler)* : ce sera ton `DATABASE_URL`.
 
-### 7.2 Moneroo
-1. Compte sur moneroo.io, puis KYC.
-2. *Developers → API Keys* : copie la **clé secrète de test** dans `MONEROO_SECRET_KEY`.
-3. Active les méthodes de ton pays (Orange, MTN, Moov, Wave).
+### 7.2 CinetPay
+1. Compte marchand sur cinetpay.com, puis vérification (KYC).
+2. Dans ton espace marchand, récupère la **clé API de test** (`sk_test_...`) et son **mot de passe API** :
+   ils vont dans `CINETPAY_API_KEY` et `CINETPAY_API_PASSWORD`.
+3. Vérifie que Orange Money, MTN, Moov et Wave Côte d'Ivoire sont activés sur ton compte.
+
+> Si ton espace CinetPay te donne plutôt une **apikey + site_id** (ancienne API), dis-le-moi : le code doit être adapté.
 
 ### 7.3 En local (pour tester)
 ```powershell
@@ -208,9 +211,8 @@ npm start
    plan **Starter** (le plan gratuit s'endort et les clients attendent une minute).
 3. *Environment* : recopie les variables de ton `.env` avec `PUBLIC_URL=https://mazone.com`.
 4. *Custom Domain* : ajoute `mazone.com` et crée chez ton registraire l'enregistrement DNS indiqué.
-5. Moneroo → *Developers → Webhooks* → URL : `https://mazone.com/api/moneroo/webhook`
-   (événements `payment.success`, `payment.failed`, `payment.cancelled`).
-   Copie le **secret de signature** dans `MONEROO_WEBHOOK_SECRET` sur Render.
+5. Rien à configurer côté notifications : le serveur donne lui-même à CinetPay l'adresse
+   `/api/cinetpay/notify` à chaque paiement, et vérifie le jeton secret reçu.
 
 > Si tout est sur un seul domaine, mets ce même domaine dans `SITEDOMAIN` **et** `APIDOMAIN` du script MikroTik.
 
@@ -224,7 +226,7 @@ npm start
 
 ### 7.6 Suivre tes ventes
 1. Dans `.env` (et sur Render), choisis un mot de passe long : `ADMIN_PASSWORD=...`.
-   Mets aussi `COMMISSION_PERCENT=` avec le taux réel de ton contrat Moneroo.
+   Mets aussi `COMMISSION_PERCENT=` avec le taux réel de ton contrat CinetPay.
 2. Ouvre **`https://mazone.com/admin.html`** sur ton téléphone ou ton PC et entre ce mot de passe.
 
 Le tableau de bord se met à jour tout seul toutes les 60 s. Il affiche :
@@ -272,11 +274,11 @@ Places conseillées : à l'entrée du marché, à la boutique de chaque revendeu
 - [ ] Téléphone neuf sur le Wi-Fi → le portail s'ouvre tout seul.
 - [ ] « Acheter un ticket » → la page d'achat s'ouvre **sans ticket**. Sinon, il manque un domaine
       dans le walled garden : regarde *IP → Hotspot → Host* ou ajoute le domaine bloqué.
-- [ ] Paiement test (passerelle démo Moneroo) → le code s'affiche en moins de 10 s.
+- [ ] Paiement test (clé de test CinetPay) → le code s'affiche en moins de 10 s.
 - [ ] « Me connecter maintenant » → internet fonctionne.
 - [ ] « Retrouver mon ticket » avec le numéro et le montant → le code est retrouvé.
 - [ ] Partage de connexion depuis le téléphone client → les autres appareils n'ont **pas** internet (TTL).
-- [ ] Clé Moneroo de **production** sur Render → un **vrai** achat de 100 F avec ton propre numéro.
+- [ ] Clé CinetPay de **production** (`sk_live_...`) sur Render → un **vrai** achat de 100 F avec ton propre numéro.
 - [ ] Coupe le courant du MikroTik → au redémarrage, tout revient sans intervention.
 - [ ] Une affiche à l'entrée : nom du Wi-Fi, prix, « Payez par Orange / MTN / Moov / Wave », numéro WhatsApp.
 
@@ -286,9 +288,9 @@ Places conseillées : à l'entrée du marché, à la boutique de chaque revendeu
 
 | Problème | Cause probable | Solution |
 |---|---|---|
-| Le client a payé mais ne voit pas de code | Webhook refusé (mauvais secret) | Vérifie `MONEROO_WEBHOOK_SECRET`. La page ticket vérifie aussi directement chez Moneroo au bout de 8 s. |
+| Le client a payé mais ne voit pas de code | Notification non reçue | La page ticket vérifie aussi directement chez CinetPay au bout de 8 s. Vérifie les clés API sur Render et les journaux (*Logs*). |
 | « Forfait momentanément épuisé » | Le routeur ne se synchronise plus | Regarde `last_router_sync` dans les stats et le *Log* du MikroTik (`sync-tickets`). |
-| La page Moneroo ne s'ouvre pas sur le Wi-Fi | Domaine de paiement bloqué | Ajoute-le au walled garden (les passerelles peuvent changer selon l'opérateur). |
+| La page CinetPay ne s'ouvre pas sur le Wi-Fi | Domaine de paiement bloqué | Ajoute-le au walled garden (les passerelles peuvent changer selon l'opérateur). |
 | Le code est refusé | Ticket absent du routeur (routeur réinitialisé) | Ouvre une fois l'URL de synchro avec `&full=1` pour renvoyer tous les tickets libres. |
 | Internet lent le soir | Trop de clients pour le débit Starlink | Baisse les `rate-limit`, vérifie la PCQ, ajoute une 2e source. |
 | Statut `paid_no_stock` | Paiement reçu sans stock disponible | Rembourse le client ou donne-lui un code à la main (cas rare : le stock se recharge toutes les 2 min). |
@@ -314,6 +316,6 @@ avec les tickets en ligne (`comment=auto:…`).
 | Énergie (onduleur / solaire) | 100 000–400 000 F |
 | **Total matériel** | **≈ 0,8 à 1,9 million F CFA** |
 | Mensuel : Starlink + Render (~4 500 F) + domaine | selon la formule Starlink |
-| Commission Moneroo | quelques % par vente |
+| Commission CinetPay | quelques % par vente |
 
 **Rentabilité :** à 200 F le ticket 24 h, 50 tickets par jour rapportent 10 000 F par jour, soit environ 300 000 F par mois.

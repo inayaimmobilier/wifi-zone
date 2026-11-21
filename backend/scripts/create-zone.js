@@ -6,12 +6,12 @@ const { Pool } = require('pg');
 const db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: /@(localhost|127.0.0.1)[:/]/.test(process.env.DATABASE_URL) ? false : { rejectUnauthorized: false } });
 
 const COUNTRIES = {
-  CI: { dial: '225', methods: ['orange_ci', 'mtn_ci', 'moov_ci', 'wave_ci'] },
-  BJ: { dial: '229', methods: ['mtn_bj', 'moov_bj', 'celtiis_bj'] },
-  TG: { dial: '228', methods: ['moov_tg', 'togocel'] },
-  SN: { dial: '221', methods: ['orange_sn', 'wave_sn', 'freemoney_sn'] },
-  ML: { dial: '223', methods: ['orange_ml', 'moov_ml'] },
-  BF: { dial: '226', methods: ['orange_bf', 'moov_bf'] },
+  CI: { dial: '225', methods: ['OM_CI', 'MTN_CI', 'MOOV_CI', 'WAVE_CI'] },
+  BJ: { dial: '229', methods: ['MTN_BJ', 'MOOV_BJ'] },
+  TG: { dial: '228', methods: ['MOOV_TG', 'TMONEY_TG'] },
+  SN: { dial: '221', methods: ['OM_SN', 'WAVE_SN', 'FREE_SN'] },
+  ML: { dial: '223', methods: ['OM_ML', 'MOOV_ML'] },
+  BF: { dial: '226', methods: ['OM_BF', 'MOOV_BF', 'WAVE_BF'] },
 };
 // profile = nom EXACT du profil MikroTik ; uptime = temps de connexion du ticket
 const FORFAITS = [

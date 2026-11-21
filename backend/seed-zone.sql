@@ -6,7 +6,7 @@
 with z as (
   insert into zones (name, country, dial_code, methods, support_phone)
   values ('VILLAGE WI-FI', 'CI', '225',
-          array['orange_ci','mtn_ci','moov_ci','wave_ci'],
+          array['OM_CI','MTN_CI','MOOV_CI','WAVE_CI'],
           '2250700000000')
   returning id, router_token
 ), p as (

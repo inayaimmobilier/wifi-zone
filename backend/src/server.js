@@ -1,6 +1,6 @@
 // =====================================================================
 //  Wi-Fi Zone Village — serveur de vente automatique de tickets
-//  Client -> page d'achat -> Moneroo (Mobile Money) -> webhook -> ticket
+//  Client -> page d'achat -> CinetPay (Mobile Money) -> notification -> ticket
 //  MikroTik <- /api/router/sync (le routeur vient chercher ses tickets)
 // =====================================================================
 require('dotenv').config();
@@ -11,17 +11,14 @@ const crypto = require('crypto');
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { Pool } = require('pg');
+const cinetpay = require('./cinetpay');
 
-const {
-  PORT = 3000, PUBLIC_URL, DATABASE_URL,
-  MONEROO_SECRET_KEY, MONEROO_WEBHOOK_SECRET, STOCK_TARGET = 60,
-} = process.env;
-for (const k of ['PUBLIC_URL', 'DATABASE_URL', 'MONEROO_SECRET_KEY', 'MONEROO_WEBHOOK_SECRET']) {
+const { PORT = 3000, PUBLIC_URL, DATABASE_URL, STOCK_TARGET = 60 } = process.env;
+for (const k of ['PUBLIC_URL', 'DATABASE_URL', 'CINETPAY_API_KEY', 'CINETPAY_API_PASSWORD']) {
   if (!process.env[k]) { console.error(`Variable manquante dans .env : ${k}`); process.exit(1); }
 }
 
 const db = new Pool({ connectionString: DATABASE_URL, ssl: /@(localhost|127.0.0.1)[:/]/.test(DATABASE_URL) ? false : { rejectUnauthorized: false }, max: 5 });
-const MONEROO = (process.env.MONEROO_BASE_URL || 'https://api.moneroo.io') + '/v1';
 const app = express();
 app.set('trust proxy', 1);
 
@@ -41,59 +38,48 @@ const safeEq = (a, b) => {
   const x = Buffer.from(String(a)), y = Buffer.from(String(b));
   return x.length === y.length && crypto.timingSafeEqual(x, y);
 };
-
-async function moneroo(method, url, body) {
-  const r = await fetch(MONEROO + url, {
-    method,
-    headers: {
-      Authorization: `Bearer ${MONEROO_SECRET_KEY}`,
-      'Content-Type': 'application/json', Accept: 'application/json',
-    },
-    body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(15000),
-  });
-  const json = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(`Moneroo ${r.status}: ${json.message || 'erreur'}`);
-  return json.data;
-}
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // --------------------------------------------- finaliser un paiement (idempotent)
-// Appelée par le webhook ET par la page ticket (filet de sécurité si le webhook tarde).
+// Appelée par la notification CinetPay ET par la page ticket (filet de sécurité).
+// On ne croit JAMAIS la notification seule : on redemande le statut à CinetPay.
+// Le montant est fixé par NOTRE serveur à la création : il ne vient jamais du navigateur.
 async function finalize(paymentId) {
   const { rows: [p] } = await db.query('select * from payments where id=$1', [paymentId]);
-  if (!p || p.status !== 'pending' || !p.moneroo_id) return;
-  const m = await moneroo('GET', `/payments/${encodeURIComponent(p.moneroo_id)}/verify`);
-  if (m.status === 'success') {
-    // On ne fait JAMAIS confiance au navigateur : montant et devise relus chez Moneroo
-    if (Number(m.amount) < p.amount || (m.currency?.code || m.currency) !== 'XOF') {
-      console.error('Montant/devise incohérent', paymentId, m.amount, m.currency); return;
-    }
-    const method = m.capture?.method?.short_code || m.method?.short_code || null;
-    await db.query('select assign_ticket($1,$2)', [paymentId, method]);
-  } else if (m.status === 'failed' || m.status === 'cancelled') {
-    await db.query("update payments set status=$2, completed_at=now() where id=$1 and status='pending'",
-      [paymentId, m.status]);
+  if (!p || p.status !== 'pending' || !p.ref) return;
+  const st = await cinetpay.getStatus(p.ref);
+  if (st.state === 'success') {
+    await db.query('select assign_ticket($1,$2)', [paymentId, st.method]);
+  } else if (st.state === 'failed') {
+    await db.query("update payments set status='failed', completed_at=now() where id=$1 and status='pending'", [paymentId]);
   }
 }
 
-// ======================================================= WEBHOOK MONEROO (corps BRUT)
-app.post('/api/moneroo/webhook', express.raw({ type: '*/*', limit: '200kb' }), (req, res) => {
-  const sig = req.get('X-Moneroo-Signature') || '';
-  const expected = crypto.createHmac('sha256', MONEROO_WEBHOOK_SECRET).update(req.body).digest('hex');
-  if (!safeEq(sig, expected)) return res.status(403).send('signature invalide');
-  res.status(200).send('ok'); // Moneroo coupe après 3 s : on répond d'abord, on traite ensuite
-
-  let evt; try { evt = JSON.parse(req.body.toString('utf8')); } catch { return; }
-  const mid = evt?.data?.id;
-  if (!mid || !String(evt.event || '').startsWith('payment.')) return;
-  db.query('select id from payments where moneroo_id=$1', [mid])
-    .then(({ rows }) => rows[0] && finalize(rows[0].id))
-    .catch((e) => console.error('webhook', e.message));
-});
+// ======================================================= NOTIFICATION CINETPAY
+// CinetPay envoie {notify_token, transaction_id, merchant_transaction_id}.
+// On vérifie que notify_token est bien celui reçu à la création du paiement.
+app.post('/api/cinetpay/notify', express.json({ limit: '50kb' }), express.urlencoded({ extended: false, limit: '50kb' }),
+  async (req, res) => {
+    const b = req.body || {};
+    const ref = String(b.merchant_transaction_id || '');
+    try {
+      const { rows: [p] } = await db.query('select id, notify_token from payments where ref=$1', [ref]);
+      if (!p || !p.notify_token || !safeEq(b.notify_token || '', p.notify_token)) {
+        return res.status(401).json({ error: 'notification invalide' });
+      }
+      await db.query('update payments set provider_id=coalesce(provider_id,$2) where id=$1', [p.id, b.transaction_id || null]);
+      await finalize(p.id);
+      res.status(200).json({ ok: true });
+    } catch (e) {
+      console.error('notify', e.message);
+      res.status(500).json({ error: 'réessayez' });      // CinetPay renverra la notification
+    }
+  });
+app.get('/api/cinetpay/notify', (_, res) => res.status(200).send('ok')); // test d'accessibilité
 
 app.use(express.json({ limit: '20kb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
-app.get('/api/health', (_, res) => res.json({ status: 'ok' }));
+app.get('/api/health', (_, res) => res.json({ status: 'ok', paiement: cinetpay.isSandbox() ? 'bac a sable' : 'production' }));
 
 // ============================================================ API PUBLIQUE CLIENT
 const payLimiter = rateLimit({ windowMs: 60_000, max: 10 });
@@ -129,32 +115,28 @@ app.post('/api/pay', payLimiter, async (req, res) => {
       "select count(*)::int n from tickets where pricing_id=$1 and status='free' and channel='online'", [p.id]);
     if (s.n < 1) return res.status(409).json({ error: 'Forfait momentanément épuisé, réessayez dans 2 minutes' });
 
-    const { rows: [pay] } = await db.query(
-      `insert into payments(zone_id,pricing_id,pricing_label,amount,phone)
-       values($1,$2,$3,$4,$5) returning id`, [z.id, p.id, p.label, p.price, tel]);
-
     // Adresse de connexion du hotspot transmise par login.html (http://login.wifi/login)
-    const loginUrl = /^http:\/\/[a-z0-9.-]+(:\d+)?\/login$/i.test(login || '') ? login : '';
-    const returnUrl = `${PUBLIC_URL}/ticket.html?pid=${pay.id}` +
-      (loginUrl ? `&login=${encodeURIComponent(loginUrl)}` : '');
+    const loginUrl = /^http:\/\/[a-z0-9.-]+(:\d+)?\/login$/i.test(login || '') ? login : null;
+    // Référence courte et imprévisible (CinetPay : 30 caractères max) — sert aussi de clé à la page ticket
+    const ref = 'WZ' + crypto.randomBytes(12).toString('hex').toUpperCase();
+    const { rows: [pay] } = await db.query(
+      `insert into payments(zone_id,pricing_id,pricing_label,amount,phone,ref,login_url)
+       values($1,$2,$3,$4,$5,$6,$7) returning id`, [z.id, p.id, p.label, p.price, tel, ref, loginUrl]);
 
-    // En mode test on n'impose pas de méthodes : Moneroo affiche sa passerelle de démonstration.
-    // En production on limite aux opérateurs du pays (un code inconnu fait échouer TOUT le paiement).
-    const isTest = /^(test_|pvk_sandbox)/.test(MONEROO_SECRET_KEY);
-    const m = await moneroo('POST', '/payments/initialize', {
-      amount: p.price,
-      currency: 'XOF',
-      description: `Ticket Wi-Fi ${p.label} - ${z.name}`,
-      return_url: returnUrl,
-      customer: {
-        email: `client${tel}@${new URL(PUBLIC_URL).hostname}`,
-        first_name: 'Client', last_name: tel, phone: tel,
-      },
-      metadata: { payment_id: pay.id, zone_id: z.id },
-      ...(isTest ? {} : { methods: z.methods }),
+    const back = `${PUBLIC_URL}/ticket.html?r=${ref}`;
+    const cp = await cinetpay.initPayment({
+      ref, amount: p.price,
+      designation: `Ticket Wi-Fi ${p.label} - ${z.name}`.slice(0, 255),
+      phone: tel,
+      email: `client${tel}@${new URL(PUBLIC_URL).hostname}`,
+      successUrl: back, failedUrl: back,
+      notifyUrl: `${PUBLIC_URL}/api/cinetpay/notify`,
     });
-    await db.query('update payments set moneroo_id=$2 where id=$1', [pay.id, m.id]);
-    res.json({ checkout_url: m.checkout_url, payment_id: pay.id });
+    await db.query('update payments set notify_token=$2, provider_id=$3 where id=$1',
+      [pay.id, cp.notifyToken, cp.transactionId]);
+    // Avec le canal PUSH, CinetPay peut envoyer la demande directement sur le téléphone :
+    // dans ce cas pas de page de paiement, on va directement attendre le ticket.
+    res.json({ checkout_url: cp.paymentUrl || back, payment_id: ref });
   } catch (e) {
     console.error('pay', e.message);
     res.status(502).json({ error: 'Paiement indisponible, réessayez' });
@@ -162,9 +144,12 @@ app.post('/api/pay', payLimiter, async (req, res) => {
 });
 
 // Statut du paiement + ticket (la page ticket.html l'interroge toutes les 3 s)
-app.get('/api/payment/:id', async (req, res) => {
+// Accepte la référence WZ... (ou l'identifiant interne)
+app.get('/api/payment/:key', async (req, res) => {
   try {
-    let { rows: [p] } = await db.query('select * from payments where id=$1', [req.params.id]);
+    const key = req.params.key;
+    const where = UUID.test(key) ? 'id=$1' : 'ref=$1';
+    let { rows: [p] } = await db.query(`select * from payments where ${where}`, [key]);
     if (!p) return res.status(404).json({ error: 'Paiement inconnu' });
     if (p.status === 'pending' && Date.now() - new Date(p.created_at) > 8000) {
       await finalize(p.id).catch((e) => console.error('finalize', e.message));
@@ -172,7 +157,7 @@ app.get('/api/payment/:id', async (req, res) => {
     }
     let code = null;
     if (p.ticket_id) ({ rows: [{ code }] } = await db.query('select code from tickets where id=$1', [p.ticket_id]));
-    res.json({ status: p.status, label: p.pricing_label, amount: p.amount, code });
+    res.json({ status: p.status, label: p.pricing_label, amount: p.amount, code, login: p.login_url });
   } catch { res.status(400).json({ error: 'Paiement invalide' }); }
 });
 
@@ -260,7 +245,7 @@ app.get('/api/router/ack', async (req, res) => {
 
 // ============================================================ TABLEAU DE BORD GÉRANT
 // Page : https://mazone.com/admin.html  —  mot de passe = ADMIN_PASSWORD (fichier .env / Render)
-const FEE = Number(process.env.COMMISSION_PERCENT || 2) / 100;  // commission Moneroo de ton contrat
+const FEE = Number(process.env.COMMISSION_PERCENT || 3) / 100;  // commission CinetPay de ton contrat
 const adminLimiter = rateLimit({ windowMs: 15 * 60_000, max: 300 });
 function admin(req, res, next) {
   const pw = process.env.ADMIN_PASSWORD;
@@ -336,7 +321,7 @@ app.post('/api/admin/resolve/:id', async (req, res) => {
   } catch { res.status(400).json({ error: 'Paiement invalide' }); }
 });
 
-// Vérifier chez Moneroo un paiement resté "pending"
+// Vérifier chez CinetPay un paiement resté "pending"
 app.post('/api/admin/recheck/:id', async (req, res) => {
   try { await finalize(req.params.id); res.json({ ok: true }); }
   catch (e) { res.status(502).json({ error: e.message }); }

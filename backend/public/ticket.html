@@ -8,9 +8,9 @@
 </div></div>
 <script>
 const q = new URLSearchParams(location.search);
-let pid = q.get('pid') || q.get('payment_id');
+let pid = q.get('r') || q.get('pid');
 try { pid = pid || localStorage.getItem('lastPayment'); } catch (e) {}
-const login = q.get('login');
+let login = q.get('login');
 const box = document.getElementById('box');
 let tries = 0;
 const show = (html) => { box.innerHTML = html; };
@@ -21,6 +21,7 @@ async function poll() {
     const d = await (await fetch('/api/payment/' + encodeURIComponent(pid))).json();
     if (d.code) {
       const code = d.code.replace(/[^A-Z0-9]/g, '');
+      login = login || d.login;
       // Connexion en 1 clic : le hotspot MikroTik accepte /login?username=..&password=.. (HTTP PAP)
       const auto = /^http:\/\/[a-z0-9.-]+(:\d+)?\/login$/i.test(login || '')
         ? login + '?username=' + code + '&password=' + code : null;

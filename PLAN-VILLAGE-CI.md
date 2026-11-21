@@ -124,8 +124,7 @@ Mets-le par écrit.
 
 ## 6. Côte d'Ivoire : points spécifiques
 
-* **Paiement** : Moneroo propose pour la CI `orange_ci`, `mtn_ci`, `moov_ci` et `wave_ci`. C'est déjà la valeur
-  par défaut de `npm run zone:create -- "VILLAGE WI-FI" CI 225XXXXXXXXXX`.
+* **Paiement** : CinetPay (société ivoirienne) accepte Orange Money, MTN, Moov et Wave CI.
   Teste **chaque** opérateur avec un vrai achat de 100 F avant l'ouverture.
 * **Wave** ouvre parfois son application ou une page `wave.com` : si le paiement Wave bloque sur le Wi-Fi,
   ajoute au walled garden le domaine qui apparaît dans *IP → Hotspot → Host*.

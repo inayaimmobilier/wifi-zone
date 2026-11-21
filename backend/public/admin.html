@@ -114,7 +114,9 @@ td.n,th.n{text-align:right}
 </div>
 
 <script>
-const OPS = { orange_ci:'Orange Money', mtn_ci:'MTN MoMo', moov_ci:'Moov Money', wave_ci:'Wave',
+const OPS = { OM_CI:'Orange Money', MTN_CI:'MTN MoMo', MOOV_CI:'Moov Money', WAVE_CI:'Wave',
+  OM:'Orange Money', MTN:'MTN MoMo', MOOV:'Moov Money', WAVE:'Wave',
+  orange_ci:'Orange Money', mtn_ci:'MTN MoMo', moov_ci:'Moov Money', wave_ci:'Wave',
   mtn_bj:'MTN MoMo', moov_bj:'Moov Money', celtiis_bj:'Celtiis', orange_sn:'Orange Money', wave_sn:'Wave',
   freemoney_sn:'Free Money', orange_ml:'Orange Money', moov_ml:'Moov Money', orange_bf:'Orange Money',
   moov_bf:'Moov Money', moov_tg:'Moov Money', togocel:'T-Money', inconnu:'Non précisé' };
@@ -183,7 +185,7 @@ async function load() {
     ['Aujourd\'hui', F(k.today_gross), `${k.today_tickets} ticket(s) vendus`],
     ['7 derniers jours', F(k.week_gross), 'chiffre d\'affaires brut'],
     ['30 derniers jours', F(k.month_gross), `${k.month_tickets} tickets · net ${F(k.month_net)}`],
-    ['Total depuis le début', F(k.all_gross), `commission Moneroo comptée : ${d.fee_percent} %`],
+    ['Total depuis le début', F(k.all_gross), `commission comptée : ${d.fee_percent} %`],
     ['Routeur MikroTik', `<span class="dot" style="background:var(--${sync[0] === 'ok' ? 'ok' : 'bad'})"></span>${sync[0] === 'ok' ? 'En ligne' : 'Hors ligne'}`, 'dernière synchro ' + sync[1]],
   ].map(([t, v, s]) => `<div class="card kpi"><h2>${t}</h2><div class="v">${v}</div><div class="s">${s}</div></div>`).join('');
 
