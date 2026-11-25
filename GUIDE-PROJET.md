@@ -113,6 +113,12 @@ Il faut une **dorsale radio** et des **points d'accès d'extérieur** en hauteur
 4. Réinitialise à vide : *New Terminal* →
    `/system reset-configuration no-defaults=yes skip-backup=yes`
    puis reconnecte-toi par l'adresse MAC.
+   **Routeur récent (hAP ax², ax³…) : débloque d'abord le hotspot**, sinon il reste inactif
+   (« not allowed by device-mode ») et l'import s'arrête avant la fin :
+   `/system device-mode update mode=advanced`, puis **ne touche plus au clavier** et
+   **débranche/rebranche l'alimentation** dans les 5 minutes. Vérifie avec `/system device-mode print`
+   (`mode: advanced`). Si l'import de `01` s'est déjà arrêté en route, importe ensuite
+   [01b-suite-config.rsc](mikrotik/01b-suite-config.rsc).
 5. Ouvre [01-config-hotspot.rsc](mikrotik/01-config-hotspot.rsc) et **modifie les 5 variables en haut** :
    nom du Wi-Fi, mot de passe admin, ton domaine.
 6. *Files* → glisse le fichier → *New Terminal* → `/import file-name=01-config-hotspot.rsc`
