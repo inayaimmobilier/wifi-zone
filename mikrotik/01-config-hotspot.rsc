@@ -1,6 +1,6 @@
 # =====================================================================
 #  WI-FI ZONE VILLAGE — Configuration MikroTik (RouterOS v7)
-#  Routeur cœur : MikroTik hAP ac³ (ou hAP ax², hEX + AP...)
+#  Routeur cœur : MikroTik hAP ax³ ou hAP ac³ (le Wi-Fi des deux est configuré automatiquement)
 #  Internet    : Starlink (routeur Starlink en mode BYPASS) sur ether1
 #
 #  AVANT DE COLLER :
@@ -40,8 +40,6 @@ add bridge=HOTSPOT interface=ether5 comment="AP / PoE out"
 
 # ---------- 3. Wi-Fi intégré du hAP ac³ (driver "wireless" classique) ----------
 # Réseau OUVERT (sans mot de passe) : c'est le portail qui protège.
-# Si ton modèle utilise le menu "WiFi" (hAP ax), configure-le dans Winbox :
-# SSID identique, canal 20 MHz, bridge HOTSPOT.
 :do {
   /interface wireless security-profiles add name=ouvert mode=none
   /interface wireless set [find default-name=wlan1] mode=ap-bridge ssid=$ZONENAME \
@@ -52,7 +50,20 @@ add bridge=HOTSPOT interface=ether5 comment="AP / PoE out"
       default-forwarding=no wps-mode=disabled disabled=no
   /interface bridge port add bridge=HOTSPOT interface=wlan1
   /interface bridge port add bridge=HOTSPOT interface=wlan2
-} on-error={ :log warning "Pas de wireless classique : configure le menu WiFi a la main" }
+} on-error={ :log info "Pas de wireless classique (normal sur hAP ax2/ax3)" }
+
+# ---------- 3 bis. Wi-Fi intégré du hAP ax² / ax³ (menu "WiFi", RouterOS 7) ----------
+# Même principe : réseau ouvert, clients isolés entre eux, dans le bridge HOTSPOT.
+:do {
+  :foreach i in=[/interface wifi find] do={
+    /interface wifi set $i configuration.mode=ap configuration.ssid=$ZONENAME \
+        datapath.client-isolation=yes disabled=no
+    :do { /interface wifi set $i configuration.country="Cote d'Ivoire" } on-error={}
+    :do { /interface wifi set $i security.authentication-types="" } on-error={}
+    /interface bridge port add bridge=HOTSPOT interface=[/interface wifi get $i name]
+  }
+  :log info "Wi-Fi (menu WiFi) configure"
+} on-error={ :log info "Pas de menu WiFi (normal sur hAP ac3)" }
 
 # ---------- 4. Adresses : /22 = jusqu'à ~1000 appareils ----------
 /ip address add address=10.10.0.1/22 interface=HOTSPOT comment="Passerelle clients"
