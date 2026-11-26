@@ -9,8 +9,9 @@
 #
 #  Plus besoin d'importer des CSV à la main : le stock se remplit seul.
 #
-#  Remplace ZONE_ID et ROUTER_TOKEN par les valeurs affichées par le
-#  serveur (commande : npm run zone:create), puis colle dans le Terminal.
+#  Remplace ROUTER_TOKEN par le router_token de ta zone (Supabase > zones),
+#  dans une COPIE PRIVÉE de ce fichier (jamais sur GitHub), puis importe-la.
+#  On peut réimporter ce fichier sans risque : il remplace l'ancienne version.
 # =====================================================================
 
 :global SYNCURL "https://wifi-zone-production.up.railway.app/api/router/sync?zone=02a78989-c240-4dd4-b724-b1e30e93dd27&token=ROUTER_TOKEN"
@@ -18,17 +19,13 @@
 # Faire confiance aux certificats HTTPS publics (RouterOS 7.19+)
 :do { /certificate settings set builtin-trust-anchors=trusted } on-error={}
 
-/system script add name=sync-tickets policy=read,write,test,policy source={
-  :global SYNCURL
-  :do {
-    /tool fetch url=$SYNCURL mode=https check-certificate=yes dst-path=sync.rsc output=file
-    :delay 1s
-    :if ([:len [/file find name=sync.rsc]] > 0) do={
-      /import file-name=sync.rsc verbose=no
-      /file remove sync.rsc
-    }
-  } on-error={ :log warning "sync-tickets : serveur injoignable (Starlink coupe ?)" }
-}
+# On repart propre si le fichier a déjà été importé
+:do { /system scheduler remove [find name=sync-tickets] } on-error={}
+:do { /system script remove [find name=sync-tickets] } on-error={}
+
+# L'adresse est écrite DANS le script : la synchro continue après un redémarrage.
+/system script add name=sync-tickets policy=read,write,test,policy source=(":do {\r\n/tool fetch url=\"" . $SYNCURL . "\" mode=https check-certificate=yes dst-path=sync.rsc output=file\r\n:delay 1s\r\n:if ([:len [/file find name=sync.rsc]] > 0) do={ /import file-name=sync.rsc verbose=no; /file remove sync.rsc }\r\n} on-error={ :log warning \"sync-tickets : serveur injoignable ou jeton refuse\" }")
+
 /system scheduler add name=sync-tickets interval=2m on-event=sync-tickets start-time=startup
 
 # Premier lancement immédiat
