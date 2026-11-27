@@ -9,6 +9,12 @@ if (!process.env.PUBLIC_URL) {
   const auto = process.env.RENDER_EXTERNAL_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "");
   if (auto) process.env.PUBLIC_URL = auto;
 }
+// Tolère une adresse saisie sans "https://" ou avec un "/" final
+if (process.env.PUBLIC_URL) {
+  let u = process.env.PUBLIC_URL.trim().replace(/\/+$/, '');
+  if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+  process.env.PUBLIC_URL = u;
+}
 const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
